@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blue Cube Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            position: relative;
+        }
+        #blueCube {
+            width: 50px;
+            height: 50px;
+            background-color: blue;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .redCube {
+            width: 30px;
+            height: 30px;
+            background-color: red;
+            position: absolute;
+            animation: fall 5s linear infinite;
+        }
+        @keyframes fall {
+            from {
+                top: -30px;
+            }
+            to {
+                top: 100vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="blueCube"></div>
+    <script>
+        function createRedCube() {
+            const redCube = document.createElement('div');
+            redCube.classList.add('redCube');
+            redCube.style.left = Math.random() * (window.innerWidth - 30) + 'px';
+            document.body.appendChild(redCube);
+            redCube.addEventListener('click', function() {
+                redCube.remove();
+            });
+        }
+        setInterval(createRedCube, 1000);
+    </script>
+</body>
+</html>

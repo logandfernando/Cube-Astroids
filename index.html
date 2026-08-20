@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blue Cube Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1a1a2e;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            display: flex;
+            gap: 40px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 10;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        #blueCube {
+            width: 60px;
+            height: 60px;
+            background-color: #00d2ff;
+            border-radius: 12px;
+            position: absolute;
+            bottom: 160px; /* Raised to clear room for the joystick zone */
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 0 20px #00d2ff;
+        }
+        .redCube {
+            width: 40px;
+            height: 40px;
+            background-color: #ff2a6d;
+            border-radius: 8px;
+            position: absolute;
+            cursor: pointer;
+            box-shadow: 0 0 15px #ff2a6d;
+        }
+        /* Joystick Styles */
+        #joystick-container {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            z-index: 15;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+        }
+        #joystick-knob {
+            width: 40px;
+            height: 40px;
+            background: #00d2ff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00d2ff;
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.05s linear;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div>Score: <span id="score-val">0</span></div>
+        <div>Lives: <span id="lives-val">3</span></div>
+    </div>
+
+    <div id="blueCube"></div>
+
+    <div id="joystick-container">
+        <div id="joystick-knob"></div>
+    </div>
+
+    <script>
+        const blueCube = document.getElementById('blueCube');
+        const scoreVal = document.getElementById('score-val');
+        const livesVal = document.getElementById('lives-val');
+        const joystick = document.getElementById('joystick-container');
+        const knob = document.getElementById('joystick-knob');
+
+        let score = 0;
+        let lives = 3;
+        let gameActive = true;
+        let spawnInterval;
+        let activeCubes = [];
+        
+        // Movement tracking variables
+        let playerX = window.innerWidth / 2;
+        let joystickX = 0;
+        const maxJoystickDistance = 40; 
+        const playerSpeedModifier = 15; // Lower = slower movement, Higher = faster movement
+
+        // Initial alignment
+        blueCube.style.left = playerX - 30 + 'px';
+
+        // Joystick Input Handling
+        let isDragging = false;
+        let startDragX = 0;
+
+        function handleStart(clientX) {
+            if (!gameActive) return;
+            isDragging = true;
+            startDragX = clientX;
+            knob.style.cursor = 'grabbing';
+        }
+
+        function handleMove(clientX) {
+            if (!isDragging || !gameActive) return;
+            let deltaX = clientX - startDragX;
+            
+            // Constrain knob within bounds
+            if (deltaX > maxJoystickDistance) deltaX = maxJoystickDistance;
+            if (deltaX < -maxJoystickDistance) deltaX = -maxJoystickDistance;
+            
+            joystickX = deltaX;
+            knob.style.transform = `translateX(${deltaX}px)`;
+        }
+
+        function handleEnd() {
+            isDragging = false;
+            joystickX = 0;
+            knob.style.transform = 'translateX(0px)';
+            knob.style.cursor = 'grab';
+        }
+
+        // Mouse listeners
+        knob.addEventListener('mousedown', (e) => handleStart(e.clientX));
+        window.addEventListener('mousemove', (e) => handleMove(e.clientX));
+        window.addEventListener('mouseup', handleEnd);
+
+        // Touch listeners
+        knob.addEventListener('touchstart', (e) => handleStart(e.touches[0].clientX), { passive: true });
+        window.addEventListener('touchmove', (e) => handleMove(e.touches[0].clientX), { passive: false });
+        window.addEventListener('touchend', handleEnd);
+
+        function createRedCube() {
+            if (!gameActive) return;
+
+            const redCube = document.createElement('div');
+            redCube.classList.add('redCube');
+            
+            const startX = Math.random() * (window.innerWidth - 40);
+            let currentY = -40;
+            const speed = 3 + Math.random() * 4 + (score * 0.1);
+
+            redCube.style.left = startX + 'px';
+            redCube.style.top = currentY + 'px';
+            document.body.appendChild(redCube);
+
+            const cubeData = {
+                element: redCube,
+                y: currentY,
+                speed: speed,
+                x: startX
+            };
+
+            const destroyHandler = function(e) {
+                e.stopPropagation();
+                if (!gameActive) return;
+                score += 10;
+                scoreVal.textContent = score;
+                removeCube(cubeData);
+            };
+
+            redCube.addEventListener('mousedown', destroyHandler);
+            redCube.addEventListener('touchstart', destroyHandler, { passive: true });
+
+            activeCubes.push(cubeData);
+        }
+
+        function removeCube(cubeData) {
+            if (cubeData.element.parentNode) {
+                cubeData.element.remove();
+            }
+            const index = activeCubes.indexOf(cubeData);
+            if (index > -1) activeCubes.splice(index, 1);
+        }
+
+        // Main game engine loop
+        function updateGame() {
+            if (!gameActive) return;
+
+            // Update player positions via joystick state
+            if (joystickX !== 0) {
+                const normX = joystickX / maxJoystickDistance;
+                playerX += normX * playerSpeedModifier;
+                // Wall boundaries
+                playerX = Math.max(30, Math.min(window.innerWidth - 30, playerX));
+                blueCube.style.left = playerX - 30 + 'px';
+            }
+
+            const blueRect = blueCube.getBoundingClientRect();
+
+            for (let i = activeCubes.length - 1; i >= 0; i--) {
+                const cube = activeCubes[i];
+                cube.y += cube.speed;
+                cube.element.style.top = cube.y + 'px';
+
+                const redRect = cube.element.getBoundingClientRect();
+
+                // Hit detection with player cube
+                if (redRect.bottom >= blueRect.top &&
+                    redRect.top <= blueRect.bottom &&
+                    redRect.right >= blueRect.left &&
+                    redRect.left <= blueRect.right) {
+                    
+                    lives--;
+                    livesVal.textContent = lives;
+                    removeCube(cube);
+
+                    if (lives <= 0) {
+                        closeTabImmediately();
+                    }
+                    continue;
+                }
+
+                // Missed cube hits floor
+                if (cube.y > window.innerHeight) {
+                    removeCube(cube);
+                }
+            }
+
+            requestAnimationFrame(updateGame);
+        }
+
+        function closeTabImmediately() {
+            gameActive = false;
+            clearInterval(spawnInterval);
+            
+            // Try different web methods to shut the browser window down
+            window.close();
+            
+            // Fallback strategy if standard window.close() is blocked by browser policy
+            setTimeout(() => {
+                window.location.href = "about:blank";
+            }, 100);
+        }
+
+        function resetGame() {
+            score = 0;
+            lives = 3;
+            gameActive = true;
+            scoreVal.textContent = score;
+            livesVal.textContent = lives;
+            playerX = window.innerWidth / 2;
+            blueCube.style.left = playerX - 30 + 'px';
+            
+            clearInterval(spawnInterval);
+            spawnInterval = setInterval(createRedCube, 800);
+            requestAnimationFrame(updateGame);
+        }
+
+        // Start 
+        resetGame();
+    </script>
+</body>
+</html>

@@ -11,48 +11,235 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #f0f0f0;
-            position: relative;
+            background-color: #1a1a2e;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            display: flex;
+            gap: 40px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 10;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
         #blueCube {
-            width: 50px;
-            height: 50px;
-            background-color: blue;
+            width: 60px;
+            height: 60px;
+            background-color: #00d2ff;
+            border-radius: 12px;
             position: absolute;
-            top: 50%;
+            bottom: 40px;
             left: 50%;
-            transform: translate(-50%, -50%);
+            transform: translateX(-50%);
+            box-shadow: 0 0 20px #00d2ff;
+            transition: left 0.1s ease-out;
         }
         .redCube {
-            width: 30px;
-            height: 30px;
-            background-color: red;
+            width: 40px;
+            height: 40px;
+            background-color: #ff2a6d;
+            border-radius: 8px;
             position: absolute;
-            animation: fall 5s linear infinite;
+            cursor: pointer;
+            box-shadow: 0 0 15px #ff2a6d;
         }
-        @keyframes fall {
-            from {
-                top: -30px;
-            }
-            to {
-                top: 100vh;
-            }
+        #game-over {
+            display: none;
+            position: absolute;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+            z-index: 20;
+            background: rgba(15, 15, 26, 0.95);
+            padding: 40px;
+            border-radius: 16px;
+            border: 2px solid #ff2a6d;
+            box-shadow: 0 0 30px rgba(255, 42, 109, 0.4);
+        }
+        #game-over h1 {
+            margin: 0 0 10px 0;
+            color: #ff2a6d;
+            font-size: 42px;
+        }
+        #game-over p {
+            margin: 0 0 25px 0;
+            font-size: 20px;
+            color: #e2e2e2;
+        }
+        #btn-restart {
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background: #00d2ff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 210, 255, 0.3);
+            transition: transform 0.1s;
+        }
+        #btn-restart:hover {
+            transform: scale(1.05);
         }
     </style>
 </head>
 <body>
+
+    <div id="ui-layer">
+        <div>Score: <span id="score-val">0</span></div>
+        <div>Lives: <span id="lives-val">3</span></div>
+    </div>
+
     <div id="blueCube"></div>
+
+    <div id="game-over">
+        <h1>GAME OVER</h1>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <button id="btn-restart" onclick="resetGame()">Play Again</button>
+    </div>
+
     <script>
+        const blueCube = document.getElementById('blueCube');
+        const scoreVal = document.getElementById('score-val');
+        const livesVal = document.getElementById('lives-val');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScore = document.getElementById('final-score');
+
+        let score = 0;
+        let lives = 3;
+        let gameActive = true;
+        let spawnInterval;
+        let activeCubes = [];
+
+        // Move blue cube with mouse
+        window.addEventListener('mousemove', (e) => {
+            if (!gameActive) return;
+            let targetX = e.clientX - 30;
+            targetX = Math.max(0, Math.min(window.innerWidth - 60, targetX));
+            blueCube.style.left = targetX + 'px';
+        });
+
+        // Touch tracking for mobile
+        window.addEventListener('touchmove', (e) => {
+            if (!gameActive) return;
+            let touch = e.touches[0];
+            let targetX = touch.clientX - 30;
+            targetX = Math.max(0, Math.min(window.innerWidth - 60, targetX));
+            blueCube.style.left = targetX + 'px';
+        }, { passive: true });
+
         function createRedCube() {
+            if (!gameActive) return;
+
             const redCube = document.createElement('div');
             redCube.classList.add('redCube');
-            redCube.style.left = Math.random() * (window.innerWidth - 30) + 'px';
+            
+            const startX = Math.random() * (window.innerWidth - 40);
+            let currentY = -40;
+            const speed = 3 + Math.random() * 4 + (score * 0.1); // Gets faster as score increases
+
+            redCube.style.left = startX + 'px';
+            redCube.style.top = currentY + 'px';
             document.body.appendChild(redCube);
-            redCube.addEventListener('click', function() {
-                redCube.remove();
-            });
+
+            const cubeData = {
+                element: redCube,
+                y: currentY,
+                speed: speed,
+                x: startX
+            };
+
+            // Click or tap to destroy
+            const destroyHandler = function(e) {
+                e.stopPropagation();
+                if (!gameActive) return;
+                score += 10;
+                scoreVal.textContent = score;
+                removeCube(cubeData);
+            };
+
+            redCube.addEventListener('mousedown', destroyHandler);
+            redCube.addEventListener('touchstart', destroyHandler, { passive: true });
+
+            activeCubes.push(cubeData);
         }
-        setInterval(createRedCube, 1000);
+
+        function removeCube(cubeData) {
+            if (cubeData.element.parentNode) {
+                cubeData.element.remove();
+            }
+            const index = activeCubes.indexOf(cubeData);
+            if (index > -1) activeCubes.splice(index, 1);
+        }
+
+        // Main game loop engine
+        function updateGame() {
+            if (!gameActive) return;
+
+            const blueRect = blueCube.getBoundingClientRect();
+
+            for (let i = activeCubes.length - 1; i >= 0; i--) {
+                const cube = activeCubes[i];
+                cube.y += cube.speed;
+                cube.element.style.top = cube.y + 'px';
+
+                const redRect = cube.element.getBoundingClientRect();
+
+                // Hit detection with player cube
+                if (redRect.bottom >= blueRect.top &&
+                    redRect.top <= blueRect.bottom &&
+                    redRect.right >= blueRect.left &&
+                    redRect.left <= blueRect.right) {
+                    
+                    lives--;
+                    livesVal.textContent = lives;
+                    removeCube(cube);
+
+                    if (lives <= 0) {
+                        endGame();
+                    }
+                    continue;
+                }
+
+                // Missed cube hits floor
+                if (cube.y > window.innerHeight) {
+                    removeCube(cube);
+                }
+            }
+
+            requestAnimationFrame(updateGame);
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(spawnInterval);
+            finalScore.textContent = score;
+            gameOverScreen.style.display = 'flex';
+            activeCubes.forEach(cube => cube.element.remove());
+            activeCubes = [];
+        }
+
+        function resetGame() {
+            score = 0;
+            lives = 3;
+            gameActive = true;
+            scoreVal.textContent = score;
+            livesVal.textContent = lives;
+            gameOverScreen.style.display = 'none';
+            blueCube.style.left = '50%';
+            
+            clearInterval(spawnInterval);
+            spawnInterval = setInterval(createRedCube, 800);
+            requestAnimationFrame(updateGame);
+        }
+
+        // Start
+        resetGame();
     </script>
 </body>
 </html>
